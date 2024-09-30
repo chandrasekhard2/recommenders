@@ -23,6 +23,17 @@ from tensorflow_recommenders import models
 from tensorflow_recommenders import tasks
 from tensorflow_recommenders.layers import feature_interaction as feature_interaction_lib
 
+class MaskedAUC(tf.keras.metrics.AUC):
+  def __init__(self, padding_label=-1, **kwargs):
+    super().__init__(from_logits=True, **kwargs)
+    self.padding_label = padding_label
+
+  def update_state(self, y_true, y_pred, sample_weight=None):
+    sample_weight = tf.cast(y_true >= 0, tf.float32)
+
+    return super().update_state(y_true, y_pred, sample_weight)
+
+
 
 class Ranking(models.Model):
   """A configurable ranking model.
@@ -113,27 +124,18 @@ class Ranking(models.Model):
     else:
       self._task = tasks.Ranking(
           loss=tf.keras.losses.BinaryCrossentropy(
-              reduction=tf.keras.losses.Reduction.NONE
+              reduction=tf.keras.losses.Reduction.NONE, from_logits=True
           ),
+
           metrics=[
-              tf.keras.metrics.AUC(name="auc"),
-              tf.keras.metrics.BinaryAccuracy(name="accuracy"),
+              MaskedAUC(name="mauc"),
           ],
-          prediction_metrics=[
-              tf.keras.metrics.Mean("prediction_mean"),
-          ],
-          label_metrics=[
-              tf.keras.metrics.Mean("label_mean")
-          ]
       )
 
   def compute_loss(self,
                    inputs: Union[
                        # Tuple of (features, labels).
-                       Tuple[
                            Dict[str, tf.Tensor],
-                           tf.Tensor
-                       ],
                        # Tuple of (features, labels, sample weights).
                        Tuple[
                            Dict[str, tf.Tensor],
@@ -141,7 +143,7 @@ class Ranking(models.Model):
                            Optional[tf.Tensor]
                        ]
                    ],
-                   training: bool = False) -> tf.Tensor:
+                   training: bool = False) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
     """Computes the loss and metrics of the model.
 
     Args:
@@ -165,40 +167,14 @@ class Ranking(models.Model):
     # We need to work around a bug in mypy - tuple narrowing
     # based on length checks doesn't work.
     # See https://github.com/python/mypy/issues/1178 for details.
-    if len(inputs) == 2:
-      inputs = cast(
-          Tuple[
-              Dict[str, tf.Tensor],
-              tf.Tensor
-          ],
-          inputs
-      )
-      features, labels = inputs
-      sample_weight = None
-    elif len(inputs) == 3:
-      inputs = cast(
-          Tuple[
-              Dict[str, tf.Tensor],
-              tf.Tensor,
-              Optional[tf.Tensor],
-          ],
-          inputs
-      )
-      features, labels, sample_weight = inputs
-    else:
-      raise ValueError(
-          "Inputs should be either a tuple of (features, labels), "
-          "or a tuple of (features, labels, sample weights). "
-          "Got a length {len(inputs)} tuple instead: {inputs}."
-      )
 
+    features = inputs
+    labels = inputs['clicked']
     outputs = self(features, training=training)
 
-    loss = self._task(labels, outputs, sample_weight=sample_weight)
+    loss = self._task(labels, outputs, sample_weight=None)
     loss = tf.reduce_mean(loss)
-    # Scales loss as the default gradients allreduce performs sum inside the
-    # optimizer.
-    return loss / tf.distribute.get_strategy().num_replicas_in_sync
+    return loss / tf.distribute.get_strategy().num_replicas_in_sync, labels, outputs
 
   def call(self, inputs: Dict[str, tf.Tensor]) -> tf.Tensor:
     """Executes forward and backward pass, returns loss.
@@ -211,7 +187,6 @@ class Ranking(models.Model):
     """
     dense_features = inputs["dense_features"]
     sparse_features = inputs["sparse_features"]
-
     sparse_embeddings = self._embedding_layer(sparse_features)
     # Combine a dictionary into a vector and squeeze dimension from
     # (batch_size, 1, emb) to (batch_size, emb).
@@ -221,18 +196,14 @@ class Ranking(models.Model):
         tf.squeeze(sparse_embedding) for sparse_embedding in sparse_embeddings
     ]
     dense_embedding_vec = self._bottom_stack(dense_features)
-
     interaction_args = sparse_embedding_vecs + [dense_embedding_vec]
     interaction_output = self._feature_interaction(interaction_args)
+    feature_interaction_output = interaction_output
     if self._concat_dense:
       feature_interaction_output = tf.concat(
           [dense_embedding_vec, interaction_output], axis=1
       )
-    else:
-      feature_interaction_output = interaction_output
-
     prediction = self._top_stack(feature_interaction_output)
-
     return tf.reshape(prediction, [-1])
 
   @property
@@ -255,3 +226,4 @@ class Ranking(models.Model):
       if layer != self._embedding_layer:
         dense_vars.extend(layer.trainable_variables)
     return dense_vars
+
