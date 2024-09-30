@@ -72,5 +72,6 @@ class Model(tf.keras.Model):
     """Custom test step using the `compute_loss` method."""
 
     loss, labels, outputs = self.compute_loss(inputs, training=False)
+    self.compiled_metrics.update_state(labels, outputs)
     return labels, outputs
 
