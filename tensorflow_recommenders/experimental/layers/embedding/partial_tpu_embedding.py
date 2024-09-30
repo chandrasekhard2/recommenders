@@ -14,7 +14,7 @@
 
 """Embedding layer for the Ranking model."""
 
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, List
 
 import tensorflow as tf
 
