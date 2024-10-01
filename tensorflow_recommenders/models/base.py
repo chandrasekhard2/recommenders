@@ -65,13 +65,20 @@ class Model(tf.keras.Model):
 
     with tf.GradientTape() as tape:
       loss, labels, outputs = self.compute_loss(inputs, training=True)
-    gradients = tape.gradient(loss, self.trainable_variables)
+
+      total_loss = loss  # + regularization_loss
+    # total_loss = tf.nn.compute_average_loss(loss, global_batch_size=135168)
+    gradients = tape.gradient(total_loss, self.trainable_variables)
+    # for i in self.trainable_variables:
+    #   tf._logging.info(f"Variable: {i}")
     self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
 
   def test_step(self, inputs):
     """Custom test step using the `compute_loss` method."""
 
     loss, labels, outputs = self.compute_loss(inputs, training=False)
-    self.compiled_metrics.update_state(labels, outputs)
-    return labels, outputs
+    total_loss = loss  # + regularization_loss
+    # total_loss = tf.nn.compute_average_loss(loss, global_batch_size=135168)
 
+    return labels, outputs
