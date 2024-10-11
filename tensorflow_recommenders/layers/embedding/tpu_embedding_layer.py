@@ -37,17 +37,33 @@ _OPTIMIZER_PARAMETERS = {
     # A tuple: first element is the embedding optimizer class. Second is the
     # list of supported hyper parameters and the second list is the unsupported
     # hyperparameters.
-    "Adam": (tf.tpu.experimental.embedding.Adam,
-             ["learning_rate", "beta_1", "beta_2",
-              "epsilon"], ["decay", "amsgrad"]),
-    "Adagrad": (tf.tpu.experimental.embedding.Adagrad,
-                ["learning_rate", "initial_accumulator_value"], ["epsilon"]),
-    "Ftrl": (tf.tpu.experimental.embedding.FTRL, [
-        "learning_rate", "learning_rate_power", "l1_regularization_strength",
-        "l2_regularization_strength", "beta", "initial_accumulator_value"
-    ], ["l2_shrinkage_regularization_strength"]),
-    "SGD": (tf.tpu.experimental.embedding.SGD, ["learning_rate"],
-            ["decay", "momentum", "nesterov"])
+    "Adam": (
+        tf.tpu.experimental.embedding.Adam,
+        ["learning_rate", "beta_1", "beta_2", "epsilon"],
+        ["decay", "amsgrad"],
+    ),
+    "Adagrad": (
+        tf.tpu.experimental.embedding.Adagrad,
+        ["learning_rate", "initial_accumulator_value", "epsilon"],
+        [],
+    ),
+    "Ftrl": (
+        tf.tpu.experimental.embedding.FTRL,
+        [
+            "learning_rate",
+            "learning_rate_power",
+            "l1_regularization_strength",
+            "l2_regularization_strength",
+            "beta",
+            "initial_accumulator_value",
+        ],
+        ["l2_shrinkage_regularization_strength"],
+    ),
+    "SGD": (
+        tf.tpu.experimental.embedding.SGD,
+        ["learning_rate"],
+        ["decay", "momentum", "nesterov"],
+    ),
 }
 _DUMMY_NAME = "tpu_embedding_helper_dummy"
 
@@ -1105,3 +1121,4 @@ def _ensure_unsupported_params_unchanged(optimizer_params, supported_params,
   for p in unsupported_params:
     if config[p] != reference_config[p]:
       raise ValueError(error_template % p)
+

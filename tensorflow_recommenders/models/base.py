@@ -17,7 +17,6 @@
 
 import tensorflow as tf
 
-
 class Model(tf.keras.Model):
   """Base model for TFRS models.
 
@@ -65,40 +64,16 @@ class Model(tf.keras.Model):
     """Custom train step using the `compute_loss` method."""
 
     with tf.GradientTape() as tape:
-      loss = self.compute_loss(inputs, training=True)
+      loss, labels, outputs = self.compute_loss(inputs, training=True)
 
-      # Handle regularization losses as well.
-      regularization_loss = tf.reduce_sum(
-          [tf.reduce_sum(loss) for loss in self.losses]
-      )
-
-      total_loss = loss + regularization_loss
-
-    gradients = tape.gradient(total_loss, self.trainable_variables)
+    gradients = tape.gradient(loss, self.trainable_variables)
     self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
-    metrics = {metric.name: metric.result() for metric in self.metrics}
-    metrics["loss"] = loss
-    metrics["regularization_loss"] = regularization_loss
-    metrics["total_loss"] = total_loss
-
-    return metrics
 
   def test_step(self, inputs):
     """Custom test step using the `compute_loss` method."""
 
-    loss = self.compute_loss(inputs, training=False)
+    loss, labels, outputs = self.compute_loss(inputs, training=False)
 
-    # Handle regularization losses as well.
-    regularization_loss = tf.reduce_sum(
-        [tf.reduce_sum(loss) for loss in self.losses]
-    )
+    return labels, outputs
 
-    total_loss = loss + regularization_loss
-
-    metrics = {metric.name: metric.result() for metric in self.metrics}
-    metrics["loss"] = loss
-    metrics["regularization_loss"] = regularization_loss
-    metrics["total_loss"] = total_loss
-
-    return metrics

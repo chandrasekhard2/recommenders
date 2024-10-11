@@ -18,6 +18,7 @@
 from typing import List, Optional, Text
 
 import tensorflow as tf
+from absl import logging
 
 
 from tensorflow_recommenders.tasks import base
@@ -88,7 +89,6 @@ class Ranking(tf.keras.layers.Layer, base.Task):
 
     loss = self._loss(
         y_true=labels, y_pred=predictions, sample_weight=sample_weight)
-
     if not compute_metrics:
       return loss
 

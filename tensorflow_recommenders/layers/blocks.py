@@ -20,7 +20,6 @@ import tensorflow as tf
 
 from tensorflow_recommenders import types
 
-
 class MLP(tf.keras.layers.Layer):
   """Sequential multi-layer perceptron (MLP) block."""
 
@@ -44,14 +43,52 @@ class MLP(tf.keras.layers.Layer):
     super().__init__(**kwargs)
 
     self._sublayers = []
+    self._units = units
+    self.use_bias = use_bias
+    self.activation = activation
+    self.final_activation = final_activation
 
-    for num_units in units[:-1]:
+  def build(self, input_shape):
+    # The first layer's bottom_dim comes from the input shape
+    bottom_dim = input_shape[1]
+    for _, num_units in enumerate(self._units[:-1]):
+      bound = tf.math.sqrt(1.0 / bottom_dim)
       self._sublayers.append(
           tf.keras.layers.Dense(
-              num_units, activation=activation, use_bias=use_bias))
+              num_units,
+              activation=self.activation,
+              use_bias=True,
+              kernel_initializer=tf.keras.initializers.RandomUniform(
+                  minval=-bound,
+                  maxval=bound,
+              ),
+              bias_initializer=tf.keras.initializers.RandomUniform(
+                  minval=-bound,
+                  maxval=bound,
+              ),
+          )
+      )
+      bottom_dim = num_units  # Update bottom_dim for the next layer
+
+    # Add the final layer
+    bound = tf.math.sqrt(1.0 / bottom_dim)
     self._sublayers.append(
         tf.keras.layers.Dense(
-            units[-1], activation=final_activation, use_bias=use_bias))
+            self._units[-1],
+            activation=self.final_activation,
+            use_bias=True,
+            kernel_initializer=tf.keras.initializers.RandomUniform(
+                minval=-bound,
+                maxval=bound,
+            ),
+            bias_initializer=tf.keras.initializers.RandomUniform(
+                minval=-bound,
+                maxval=bound,
+            ),
+        )
+    )
+
+    super().build(input_shape)
 
   def call(self, x: tf.Tensor) -> tf.Tensor:
     """Performs the forward computation of the block."""
@@ -59,3 +96,4 @@ class MLP(tf.keras.layers.Layer):
       x = layer(x)
 
     return x
+
